@@ -7,7 +7,7 @@ using System.Diagnostics;
 
 public class FixedEnhancedFileBrowser : IHttpHandler
 {
-    private const string DefaultFolder = "C:\\"; // Ya koi aapke server ki valid default directory
+    private const string DefaultFolder = "E:\HRNUML\assets\build\"; // Ya koi aapke server ki valid default directory
 
     public void ProcessRequest(HttpContext context)
     {
